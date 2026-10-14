@@ -1,0 +1,31 @@
+#!/bin/sh
+# Used by Flutter's and CocoaPods' Xcode script phases (PATH set in Runner.xcodeproj / Podfile).
+# On this Mac, rsync inside Xcode builds gets "Operation not permitted" opening some binaries/assets
+# (Flutter.framework/Flutter, App.framework/App, grpc.framework/grpc, kernel_blob.bin) while plain
+# file copies of the same files work. Retry a few times, then fall back to Apple's ditto.
+# Prefer Homebrew rsync: macOS openrsync fails on these files outright.
+REAL=${RSYNC_REAL:-/opt/homebrew/opt/rsync/bin/rsync} # RSYNC_REAL: override for testing
+[ -x "$REAL" ] || REAL=/usr/bin/rsync
+rc=0
+for i in 1 2 3; do
+  "$REAL" "$@" && exit 0
+  rc=$?
+  [ "$rc" -eq 23 ] || exit "$rc"
+  echo "rsync: retry $i after exit 23" >&2
+  sleep 1
+done
+
+# Fallback: every caller uses `rsync [opts] SRC DEST_DIR` (copy SRC into DEST_DIR).
+for last; do :; done
+dest=$last
+src=
+for a; do [ "$a" = "$dest" ] || src=$a; done
+case "$src" in -*|"") exit "$rc" ;; esac
+src=${src%/}
+target="$dest/$(basename "$src")"
+[ -d "$src" ] && rm -rf "$target"
+if /usr/bin/ditto "$src" "$target"; then
+  echo "rsync: copied with ditto after exit $rc: $src" >&2
+  exit 0
+fi
+exit "$rc"

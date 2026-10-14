@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.couplefit.couple_fit",
+      "sha256_cert_fingerprints": [
+        "39:4B:AC:24:EA:F9:4B:C0:58:98:81:50:1A:D6:AA:5B:56:0D:BF:71:65:CC:2C:43:D7:09:8F:0B:8F:27:74:3A"
+      ]
+    }
+  }
+]

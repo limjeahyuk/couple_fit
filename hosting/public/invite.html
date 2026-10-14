@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>같이 운동해요</title>
+<meta property="og:title" content="같이 운동해요">
+<meta property="og:description" content="짝꿍이 커플 운동 앱에 초대했어요">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=Space+Grotesk:wght@700&display=swap">
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #111318; color: #F2F3F5;
+         font-family: 'IBM Plex Sans KR', system-ui, sans-serif; }
+  main { width: 100%; max-width: 390px; box-sizing: border-box; padding: 32px 20px; display: flex; flex-direction: column; gap: 16px; text-align: center; }
+  .pair { display: flex; justify-content: center; }
+  .pair span { width: 56px; height: 56px; border-radius: 50%; border: 3px solid #111318; display: flex; align-items: center; justify-content: center; }
+  h1 { margin: 8px 0 0; font-size: 28px; }
+  p { margin: 0; color: #9AA0AC; line-height: 1.6; }
+  .code { background: #1B1E25; border-radius: 20px; padding: 18px; }
+  .code b { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 32px; letter-spacing: 0.15em; color: #C6F36B; margin-top: 4px; }
+  a.btn { display: flex; align-items: center; justify-content: center; height: 60px; border-radius: 20px; font-size: 17px; font-weight: 700; text-decoration: none; }
+  .primary { background: #C6F36B; color: #111318; }
+  .ghost { border: 1.5px solid #2E333D; color: #C4C8D0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="pair" aria-hidden="true"><span style="background:#C6F36B"></span><span style="background:#FF8E6E; margin-left:-14px"></span></div>
+  <h1>같이 운동해요</h1>
+  <p>짝꿍이 커플 운동 앱에 초대했어요.<br>앱에서 열면 바로 연결돼요.</p>
+  <div class="code" id="codeBox" hidden><p>커플 코드</p><b id="code"></b></div>
+  <a class="btn primary" id="open" href="#">앱에서 열기</a>
+  <a class="btn ghost" id="ios" hidden>App Store에서 받기</a>
+  <a class="btn ghost" id="android" hidden>Google Play에서 받기</a>
+  <p id="later" hidden>앱을 설치한 뒤 이 링크를 다시 눌러 주세요.<br>또는 앱의 커플 화면에서 위 코드를 입력하세요.</p>
+</main>
+<script>
+  // Store links: fill in once the app is published.
+  const APP_STORE = '', PLAY_STORE = '';
+
+  const code = (location.pathname.split('/').filter(Boolean)[1] || '').toUpperCase();
+  const token = new URLSearchParams(location.search).get('t') || '';
+  const valid = /^[A-Z0-9]{6}$/.test(code) && /^[a-z0-9]{0,32}$/.test(token);
+  if (valid) {
+    document.getElementById('code').textContent = code;
+    document.getElementById('codeBox').hidden = false;
+    document.getElementById('open').href = 'couplefit://invite/' + code + (token ? '?t=' + token : '');
+  } else {
+    document.getElementById('open').hidden = true;
+  }
+  if (APP_STORE) Object.assign(document.getElementById('ios'), { href: APP_STORE, hidden: false });
+  if (PLAY_STORE) Object.assign(document.getElementById('android'), { href: PLAY_STORE, hidden: false });
+  document.getElementById('later').hidden = false;
+</script>
+</body>
+</html>

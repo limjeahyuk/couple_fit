@@ -1,0 +1,7 @@
+{
+  "applinks": {
+    "details": [
+      { "appIDs": ["8WW9CMZ6D2.com.couplefit.coupleFit"], "components": [{ "/": "/invite/*" }] }
+    ]
+  }
+}
