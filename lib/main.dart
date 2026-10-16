@@ -16,6 +16,7 @@ import 'invite.dart';
 import 'push.dart';
 import 'records.dart';
 import 'routines.dart';
+import 'setup.dart';
 import 'theme.dart';
 import 'workout.dart';
 
@@ -212,6 +213,7 @@ class _ShellState extends State<Shell> {
   Json? me, paDoc;
   String? paId;
   List<Json> mySes = [], paSes = [], myBody = [], paBody = [];
+  bool bodyLoaded = false;
   List<QueryDocumentSnapshot<Json>> routines = [], requests = [];
   late final List<StreamSubscription> _subs;
   StreamSubscription? _paDocSub;
@@ -255,7 +257,10 @@ class _ShellState extends State<Shell> {
         if (me != null) autoAcceptInvite(me!, requests);
       }, onError: _ignore),
       _sessions(myUid).listen((v) => setState(() => mySes = v), onError: _ignore),
-      _body(myUid).listen((v) => setState(() => myBody = v), onError: _ignore),
+      _body(myUid).listen((v) => setState(() {
+            myBody = v;
+            bodyLoaded = true;
+          }), onError: _ignore),
       routinesOf(myUid)
           .orderBy('createdAt')
           .snapshots()
@@ -313,6 +318,10 @@ class _ShellState extends State<Shell> {
   @override
   Widget build(BuildContext context) {
     if (me == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    // First run (or an older account): gender + height/weight before anything else.
+    if (me!['gender'] == null || (bodyLoaded && !myBody.any((b) => b['weight'] is num))) {
+      return ProfileSetup(gender: me!['gender'], last: myBody.lastOrNull);
+    }
     // Debug preview: an in-memory partner (never saved) when no real one is linked.
     final demo = demoPartner.value && _paData.isEmpty;
     final data = AppData(

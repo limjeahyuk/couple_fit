@@ -3,6 +3,9 @@ import 'package:couple_fit/db.dart';
 import 'package:couple_fit/demo.dart';
 import 'package:couple_fit/home.dart';
 import 'package:couple_fit/records.dart';
+import 'package:couple_fit/exercises.dart';
+import 'package:couple_fit/routines.dart';
+import 'package:couple_fit/setup.dart';
 import 'package:couple_fit/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,4 +47,48 @@ void main() {
       });
     }
   }
+
+  testWidgets('exercise picker: every body part renders, picks come back with weights', (t) async {
+    t.view.physicalSize = const Size(375 * 3, 812 * 3);
+    t.view.devicePixelRatio = 3;
+    List<Object?>? got;
+    await t.pumpWidget(MaterialApp(
+      theme: appTheme(),
+      home: Builder(
+        builder: (c) => TextButton(
+          onPressed: () async => got = await showModalBottomSheet(
+            context: c,
+            isScrollControlled: true,
+            builder: (_) => ExercisePicker(person: const {'gender': 'm', 'uid': 'p'}, body: const [{'weight': 72.5}]),
+          ),
+          child: const Text('open'),
+        ),
+      ),
+    ));
+    await t.tap(find.text('open'));
+    await t.pumpAndSettle();
+    for (final c in catalog.keys) {
+      await t.tap(find.text(c).first);
+      await t.pump();
+      expect(t.takeException(), isNull, reason: c);
+    }
+    await t.tap(find.text('가슴').first);
+    await t.pump();
+    await t.tap(find.text('벤치프레스'));
+    await t.pump();
+    await t.tap(find.text('1개 추가'));
+    await t.pumpAndSettle();
+    expect(got!.map((e) => (e as dynamic).weight), ['42.5kg']);
+  });
+
+  testWidgets('first-run setup renders and asks for gender first', (t) async {
+    t.view.physicalSize = const Size(375 * 3, 812 * 3);
+    t.view.devicePixelRatio = 3;
+    await t.pumpWidget(MaterialApp(theme: appTheme(), home: const ProfileSetup(last: {'height': 175, 'weight': 72.5})));
+    expect(find.text('72.5'), findsOneWidget); // prefilled from the latest body record
+    await t.tap(find.text('시작하기'));
+    await t.pump();
+    expect(find.text('성별을 골라주세요'), findsOneWidget);
+    expect(t.takeException(), isNull);
+  });
 }

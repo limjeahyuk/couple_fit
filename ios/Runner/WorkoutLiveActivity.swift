@@ -1,6 +1,5 @@
 import ActivityKit
 import Flutter
-import UserNotifications
 
 /// MethodChannel "couplefit/live_activity": start / update / end the lock-screen workout timer.
 enum WorkoutLiveActivity {
@@ -38,7 +37,6 @@ enum WorkoutLiveActivity {
     let attrs = WorkoutAttributes(
       routine: a["routine"] as? String ?? "", startedAt: date(a["startedAt"]) ?? Date())
     _ = try? Activity.request(attributes: attrs, content: .init(state: s, staleDate: s.restEnd))
-    scheduleRestAlert(s)
   }
 
   @available(iOS 16.2, *)
@@ -49,7 +47,6 @@ enum WorkoutLiveActivity {
         await act.update(.init(state: s, staleDate: s.restEnd))
       }
     }
-    scheduleRestAlert(s)
   }
 
   @available(iOS 16.2, *)
@@ -59,21 +56,5 @@ enum WorkoutLiveActivity {
         await act.end(nil, dismissalPolicy: .immediate)
       }
     }
-    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["rest"])
-  }
-
-  /// Rings when rest is over even if the phone is locked (the app is suspended then).
-  private static func scheduleRestAlert(_ s: WorkoutAttributes.ContentState) {
-    let center = UNUserNotificationCenter.current()
-    center.removePendingNotificationRequests(withIdentifiers: ["rest"])
-    guard let end = s.restEnd, end.timeIntervalSinceNow > 0.5 else { return }
-    let n = UNMutableNotificationContent()
-    n.title = "휴식 끝!"
-    n.body = s.detail
-    n.sound = .default
-    center.add(
-      UNNotificationRequest(
-        identifier: "rest", content: n,
-        trigger: UNTimeIntervalNotificationTrigger(timeInterval: end.timeIntervalSinceNow, repeats: false)))
   }
 }

@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // Firestore layout:
-//   users/{uid}              {name, code, partnerId?, nudgeAt?, avatar?}
+//   users/{uid}              {name, code, partnerId?, nudgeAt?, avatar?, gender? (m/f, for default weights)}
 //   users/{uid}/routines/*   {name, tag, exercises[], by, createdAt, lastDone?}
 //   users/{uid}/sessions/*   {date 'yyyy-MM-dd', routine, totalSec, restSec, sets, exCount, notify, log[], endedAt}
 //   users/{uid}/body/{date}  {date, height cm, weight kg, fat %, muscle kg?}  (one measurement per day)
@@ -32,11 +32,11 @@ String relDay(String key) {
   return n == 0 ? '오늘' : n == 1 ? '어제' : '$n일 전';
 }
 
-/// Arrow buttons mid-workout: reps ±1 (timed "40초" ±5).
+/// Arrow buttons: reps ±1, timed "40초" ±5, cardio "30분" ±5.
 String stepReps(String reps, int dir) {
   final m = RegExp(r'^(\d+)(.*)$').firstMatch(reps.trim());
   if (m == null) return reps;
-  final unit = m[2]!, step = unit.contains('초') ? 5 : 1;
+  final unit = m[2]!, step = unit.contains('초') || unit.contains('분') ? 5 : 1;
   final next = int.parse(m[1]!) + dir * step;
   return '${next < step ? step : next}$unit';
 }
@@ -112,7 +112,10 @@ class Exercise {
   String name, reps, weight; // reps may be time, e.g. '40초'
   int sets, restSec;
 
-  bool get timed => reps.contains('초');
+  bool get timed => reps.contains('초') || cardio;
+
+  /// Running, swimming, hiking...: one entry of N minutes, no sets/weight/rest.
+  bool get cardio => reps.endsWith('분');
 
   factory Exercise.fromMap(Json m) => Exercise(
       name: m['name'] ?? '', sets: m['sets'] ?? 3, reps: '${m['reps'] ?? 10}', weight: m['weight'] ?? '', restSec: m['restSec'] ?? 60);
@@ -122,8 +125,10 @@ class Exercise {
 List<Exercise> exercisesOf(Json routine) =>
     [for (final e in (routine['exercises'] as List? ?? [])) Exercise.fromMap(Json.from(e))];
 
-/// ~1 min per set plus planned rest.
-int estMins(List<Exercise> ex) => (ex.fold(0, (a, e) => a + e.sets * (60 + e.restSec)) / 60).round();
+/// ~1 min per set plus planned rest; cardio counts its minutes.
+int estMins(List<Exercise> ex) =>
+    (ex.fold(0, (a, e) => a + (e.cardio ? e.sets * 60 * (int.tryParse(e.reps.replaceAll('분', '')) ?? 0) : e.sets * (60 + e.restSec))) / 60)
+        .round();
 
 String routineMeta(Json r) {
   final ex = exercisesOf(r);

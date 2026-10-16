@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'db.dart';
+import 'push.dart';
 import 'theme.dart';
 
 /// Pure workout state. Wall-clock based so it stays correct while the app is backgrounded.
@@ -31,22 +32,70 @@ class WorkoutTracker {
   int get doneSets => exercises.take(ex).fold(0, (a, e) => a + e.sets) + setIdx;
   bool get complete => doneSets == totalSets;
   int get elapsedSec => (_end ?? _now()).difference(start).inSeconds;
+
+  /// Saved workout time: the clock, or the logged cardio minutes if more
+  /// (a run done first and ticked off afterwards still counts its 30 minutes).
+  int get totalSec {
+    final cardio = log.fold(0, (a, e) {
+      final m = RegExp(r'^(\d+)분$').firstMatch('${e['reps']}');
+      return a + (m == null ? 0 : int.parse(m[1]!));
+    });
+    return elapsedSec > cardio * 60 ? elapsedSec : cardio * 60;
+  }
+
   int get restLeft => resting ? restTarget - _now().difference(_restStart!).inSeconds : 0;
   int get restSec => (_restTotal + (resting ? _now().difference(_restStart!) : Duration.zero)).inSeconds;
   DateTime? get restEnd => resting ? _restStart!.add(Duration(seconds: restTarget)) : null;
 
+  /// State before each completed set (or early finish), so mistakes can be undone one at a time.
+  final _undo =
+      <({int ex, int setIdx, int restTarget, DateTime? restStart, Duration restTotal, DateTime? end, bool logged})>[];
+  void _snap(bool logged) => _undo.add((
+    ex: ex,
+    setIdx: setIdx,
+    restTarget: restTarget,
+    restStart: _restStart,
+    restTotal: _restTotal,
+    end: _end,
+    logged: logged,
+  ));
+  bool get canUndo => _undo.isNotEmpty;
+
+  /// Back to just before the last completed set (its log entry and the rest after it are dropped),
+  /// or un-finish an early "여기까지 저장". The overall clock keeps running.
+  void undo() {
+    if (_undo.isEmpty) return;
+    final u = _undo.removeLast();
+    ex = u.ex;
+    setIdx = u.setIdx;
+    restTarget = u.restTarget;
+    _restStart = u.restStart;
+    _restTotal = u.restTotal;
+    _end = u.end;
+    if (u.logged) log.removeLast();
+  }
+
+  /// Sets of exercise [i] ±1: at least 1, and never below what's done (+ the one in progress).
+  void stepSets(int i, int dir) {
+    final e = exercises[i];
+    final min = i == ex ? setIdx + 1 : (i < ex ? e.sets : 1);
+    e.sets = (e.sets + dir).clamp(min, 20);
+  }
+
   void completeSet() {
     if (finished || resting) return;
+    _snap(true);
     log.add({'ex': current.name, 'reps': current.reps, 'weight': current.weight});
     restTarget = current.restSec;
+    final rest = restTarget > 0 ? _now() : null; // 0s rest (e.g. cardio): straight on, no "rest over" buzz
     if (++setIdx < current.sets) {
-      _restStart = _now();
+      _restStart = rest;
     } else if (ex == exercises.length - 1) {
       _end = _now();
     } else {
       ex++;
       setIdx = 0;
-      _restStart = _now();
+      _restStart = rest;
     }
   }
 
@@ -69,8 +118,10 @@ class WorkoutTracker {
   }
 
   void finishNow() {
+    if (finished) return;
+    _snap(false);
     endRest();
-    _end ??= _now();
+    _end = _now();
   }
 }
 
@@ -109,7 +160,8 @@ class WorkoutSession extends ChangeNotifier {
     _liveCall('start', {..._liveState(t), 'routine': r['name'], 'startedAt': t.start.millisecondsSinceEpoch});
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (t.tick()) {
-        HapticFeedback.heavyImpact();
+        _buzz();
+        showRestAlertNow(_liveState(t)['detail'] as String);
         _liveCall('update', _liveState(t));
       }
       notifyListeners();
@@ -124,10 +176,23 @@ class WorkoutSession extends ChangeNotifier {
   bool notify = true, saving = false;
   bool adjusting = false; // set card shows ▲▼ after tapping its numbers
 
-  /// Apply a tracker change, then mirror it to the lock screen.
+  /// Rest is over: three strong buzzes, so it's felt mid-set without looking at the phone.
+  static Future<void> _buzz() async {
+    for (var i = 0; i < 3; i++) {
+      HapticFeedback.vibrate();
+      await Future.delayed(const Duration(milliseconds: 600));
+    }
+  }
+
+  /// Apply a tracker change, then mirror it to the lock screen and the rest-over alert.
   void act(void Function() change) {
+    final wasFinished = t.finished;
     change();
+    if (wasFinished && !t.finished) {
+      _liveCall('start', {..._liveState(t), 'routine': r['name'], 'startedAt': t.start.millisecondsSinceEpoch});
+    }
     _liveCall(t.finished ? 'end' : 'update', t.finished ? null : _liveState(t));
+    scheduleRestAlert(t.resting ? t.restEnd : null, t.finished ? '' : _liveState(t)['detail'] as String);
     notifyListeners();
   }
 
@@ -140,7 +205,7 @@ class WorkoutSession extends ChangeNotifier {
       await sessionsOf(myUid).add({
         'date': date,
         'routine': r['name'],
-        'totalSec': t.elapsedSec,
+        'totalSec': t.totalSec,
         'restSec': t.restSec,
         'sets': t.doneSets,
         'exCount': t.exercises.length,
@@ -160,14 +225,13 @@ class WorkoutSession extends ChangeNotifier {
 
   bool routineSaved = false;
 
-  /// Reps/weight changed mid-workout vs the routine as saved, e.g. "벤치프레스  40kg × 10회 → 45kg × 8회".
+  /// Sets/reps/weight changed mid-workout vs the routine as saved, e.g. "벤치프레스  40kg × 10회 → 45kg × 8회".
   List<String> get changes {
     final orig = exercisesOf(r);
-    String fmt(Exercise e) => '${e.weight.isEmpty ? '' : '${e.weight} × '}${e.reps}${e.timed ? '' : '회'}';
+    String fmt(Exercise e) => '${e.sets}세트 · ${e.weight.isEmpty ? '' : '${e.weight} × '}${e.reps}${e.timed ? '' : '회'}';
     return [
       for (var i = 0; i < t.exercises.length && i < orig.length; i++)
-        if (t.exercises[i].reps != orig[i].reps || t.exercises[i].weight != orig[i].weight)
-          '${orig[i].name}  ${fmt(orig[i])} → ${fmt(t.exercises[i])}',
+        if (fmt(t.exercises[i]) != fmt(orig[i])) '${orig[i].name}  ${fmt(orig[i])} → ${fmt(t.exercises[i])}',
     ];
   }
 
@@ -180,6 +244,7 @@ class WorkoutSession extends ChangeNotifier {
   void end() {
     _tick.cancel();
     _liveCall('end');
+    scheduleRestAlert(null, '');
     activeWorkout.value = null;
   }
 }
@@ -216,28 +281,6 @@ class WorkoutView extends StatelessWidget {
     if (choice == 'save') s.act(t.finishNow);
   }
 
-  /// ▲ value ▼ with its label; [step] gets +1 / -1. Changes apply to the remaining sets right away.
-  Widget _stepper(String value, String label, void Function(int dir) step, {double size = 44, bool arrows = true}) =>
-      Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (arrows)
-            IconButton(
-              tooltip: '$label 올리기',
-              onPressed: () => step(1),
-              icon: const Icon(Icons.keyboard_arrow_up_rounded, color: sub, size: 32),
-            ),
-          Text(value, style: digits(size)),
-          Text(label, style: ts(12, color: muted)),
-          if (arrows)
-            IconButton(
-              tooltip: '$label 내리기',
-              onPressed: () => step(-1),
-              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: sub, size: 32),
-            ),
-        ],
-      );
-
   /// Adjust an upcoming exercise from the order list (same arrows, no keyboard).
   Future<void> _edit(BuildContext context, Exercise e) => showDialog<void>(
     context: context,
@@ -248,13 +291,16 @@ class WorkoutView extends StatelessWidget {
         builder: (_, _) => Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _stepper(e.reps, e.timed ? '시간' : '회', (d) => s.act(() => e.reps = stepReps(e.reps, d)), size: 32),
-            _stepper(
-              e.weight.isEmpty ? '-' : e.weight,
-              '무게',
-              (d) => s.act(() => e.weight = stepWeight(e.weight, d)),
-              size: 32,
-            ),
+            if (!e.cardio)
+              stepper('${e.sets}', '세트', (d) => s.act(() => t.stepSets(t.exercises.indexOf(e), d)), size: 32),
+            stepper(e.reps, e.timed ? '시간' : '회', (d) => s.act(() => e.reps = stepReps(e.reps, d)), size: 32),
+            if (!e.cardio)
+              stepper(
+                e.weight.isEmpty ? '-' : e.weight,
+                '무게',
+                (d) => s.act(() => e.weight = stepWeight(e.weight, d)),
+                size: 32,
+              ),
           ],
         ),
       ),
@@ -277,6 +323,7 @@ class WorkoutView extends StatelessWidget {
 
   Widget _session(BuildContext context) {
     final e = t.current;
+    final divider = Container(width: 1, height: 44, color: off, margin: const EdgeInsets.symmetric(horizontal: 8));
     final exs = t.exercises;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
@@ -336,27 +383,45 @@ class WorkoutView extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
                     child: Column(
                       children: [
+                        // Expanded so long weights ("102.5kg") shrink to fit instead of overflowing.
                         Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            _stepper(
-                              e.reps,
-                              e.timed ? '시간' : '회',
-                              (d) => s.act(() => e.reps = stepReps(e.reps, d)),
-                              arrows: s.adjusting,
+                            if (!e.cardio) ...[
+                              Expanded(
+                                flex: 2,
+                                child: stepper(
+                                  '${e.sets}',
+                                  '세트',
+                                  (d) => s.act(() => t.stepSets(t.ex, d)),
+                                  size: 40,
+                                  arrows: s.adjusting,
+                                ),
+                              ),
+                              divider,
+                            ],
+                            Expanded(
+                              flex: 3,
+                              child: stepper(
+                                e.reps,
+                                e.timed ? '시간' : '회',
+                                (d) => s.act(() => e.reps = stepReps(e.reps, d)),
+                                size: 40,
+                                arrows: s.adjusting,
+                              ),
                             ),
-                            Container(
-                              width: 1,
-                              height: 44,
-                              color: off,
-                              margin: const EdgeInsets.symmetric(horizontal: 24),
-                            ),
-                            _stepper(
-                              e.weight.isEmpty ? '-' : e.weight,
-                              '무게',
-                              (d) => s.act(() => e.weight = stepWeight(e.weight, d)),
-                              arrows: s.adjusting,
-                            ),
+                            if (!e.cardio) ...[
+                              divider,
+                              Expanded(
+                                flex: 4,
+                                child: stepper(
+                                  e.weight.isEmpty ? '-' : e.weight,
+                                  '무게',
+                                  (d) => s.act(() => e.weight = stepWeight(e.weight, d)),
+                                  size: 40,
+                                  arrows: s.adjusting,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -480,7 +545,19 @@ class WorkoutView extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: 16),
+        if (t.canUndo)
+          Center(
+            child: TextButton.icon(
+              onPressed: () => s.act(() {
+                t.undo();
+                s.adjusting = false;
+              }),
+              style: TextButton.styleFrom(foregroundColor: muted, minimumSize: const Size(0, 48)),
+              icon: const Icon(Icons.undo_rounded, size: 18),
+              label: Text(t.resting ? '방금 세트 취소' : '이전 세트 취소'),
+            ),
+          ),
+        const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.all(4),
           child: Text('오늘의 순서', style: ts(13, color: muted)),
@@ -624,6 +701,14 @@ class WorkoutView extends StatelessWidget {
               ],
             ),
           ),
+          if (t.canUndo && !s.saving)
+            TextButton.icon(
+              onPressed: () => s.act(t.undo),
+              style: TextButton.styleFrom(foregroundColor: muted, minimumSize: const Size.fromHeight(48)),
+              icon: const Icon(Icons.undo_rounded, size: 18),
+              // Finished with every set done = the last tap was a set; otherwise it was "여기까지 저장".
+              label: Text(t.complete ? '마지막 세트 되돌리기' : '운동 이어서 하기'),
+            ),
           FilledButton(onPressed: s.saving ? null : () => _save(context), child: const Text('기록 저장하고 홈으로')),
         ],
       ),

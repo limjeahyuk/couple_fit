@@ -102,3 +102,50 @@ Widget bar(double value, Color color, {double h = 6}) => LinearProgressIndicator
 Widget h1(String text) => Text(text, style: ts(28, w: FontWeight.w700, h: 1.35));
 
 const checkIcon = Icons.check_rounded;
+
+/// Selectable rounded chip (metric / filter / category pickers).
+Widget pill(String label, bool on, VoidCallback onTap) => Padding(
+  padding: const EdgeInsets.only(right: 8, bottom: 8),
+  child: Material(
+    color: on ? lime : surf2,
+    shape: const StadiumBorder(),
+    child: InkWell(
+      customBorder: const StadiumBorder(),
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 36),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        // widthFactor 1: center vertically but stay as wide as the label (alignment alone fills the row).
+        child: Center(widthFactor: 1, child: Text(label, style: ts(13, w: FontWeight.w600, color: on ? ink : sub))),
+      ),
+    ),
+  ),
+);
+
+/// ▲ value ▼ with its label; [step] gets +1 / -1. [onTapValue] lets the value be typed instead.
+Widget stepper(String value, String label, void Function(int dir) step,
+        {double size = 44, bool arrows = true, VoidCallback? onTapValue}) =>
+    Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (arrows)
+          IconButton(
+            tooltip: '$label 올리기',
+            onPressed: () => step(1),
+            visualDensity: size < 30 ? VisualDensity.compact : null,
+            icon: Icon(Icons.keyboard_arrow_up_rounded, color: sub, size: size < 30 ? 26 : 32),
+          ),
+        GestureDetector(
+          onTap: onTapValue,
+          child: FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: digits(size), maxLines: 1)),
+        ),
+        Text(label, style: ts(12, color: muted)),
+        if (arrows)
+          IconButton(
+            tooltip: '$label 내리기',
+            onPressed: () => step(-1),
+            visualDensity: size < 30 ? VisualDensity.compact : null,
+            icon: Icon(Icons.keyboard_arrow_down_rounded, color: sub, size: size < 30 ? 26 : 32),
+          ),
+      ],
+    );

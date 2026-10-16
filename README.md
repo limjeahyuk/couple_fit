@@ -9,8 +9,8 @@ Flutter (iOS / Android) + Firebase (Auth · Firestore · Hosting, 선택: Cloud 
 | 영역 | 내용 |
 |---|---|
 | **홈** | 오늘의 추천 루틴 · 운동 시작, 운동 중 카드(경과 시간 · 현재 세트/휴식), 오늘 우리 둘 완료 여부 · 함께 N일 연속, 이번 주 기록, 콕 찌르기 |
-| **운동** | 루틴 목록 · 편집, 짝꿍 루틴 짜주기. 운동 중에도 하단 탭 이동 가능 |
-| **운동 진행** | 세트 완료 → 휴식 카운트다운(+15초 · 건너뛰기), 횟수·무게를 숫자 탭 → ▲▼로 수정, 세트별 기록 저장, 끝나면 바꾼 값을 루틴에 저장 |
+| **운동** | 루틴 목록, 부위별 운동 목록에서 골라 추가(성별·체중 기준 추천 무게), ▲▼ / 숫자 입력으로 편집, 짝꿍 루틴 짜주기. 운동 중에도 하단 탭 이동 가능 |
+| **운동 진행** | 세트 완료 → 휴식 카운트다운(+15초 · 건너뛰기), 세트 수·횟수·무게를 숫자 탭 → ▲▼로 수정, 방금 세트 취소(되돌리기), 세트별 기록 저장, 끝나면 바꾼 값을 루틴에 저장 |
 | **캘린더** | 두 사람의 월간 운동 기록, 날짜별 세트 상세 |
 | **기록** | 몸 기록(키 · 체중 · 체지방률 · 골격근량 → 체지방량 · BMI 자동 계산), 변화 그래프(실제 값 / 처음 대비 변화, 짝꿍 겹쳐 보기), 짝꿍과 비교, 운동 기록(함께 · 나 · 짝꿍) |
 | **커플** | 초대 링크 / 커플 코드로 연결, 아바타 꾸미기(배경색 · 캐릭터) |
@@ -77,7 +77,8 @@ lib/
   db.dart          Firestore 경로 · 모델, AppData(잠금/연속일/추천 루틴), 몸 지표 계산, 기본 루틴
   theme.dart       디자인 토큰(색 · 폰트), 공용 위젯(avatar, box, ring, bar ...)
   home.dart        홈
-  routines.dart    루틴 목록 · 편집, 짝꿍 루틴
+  routines.dart    루틴 목록 · 편집, 운동 고르기 시트, 짝꿍 루틴
+  exercises.dart   부위별 운동 목록, 성별·체중 기준 추천 무게
   workout.dart     WorkoutTracker(순수 로직) · WorkoutSession(탭 위에서 유지) · 운동/완료 화면
   calendar.dart    캘린더
   records.dart     기록 탭(몸 기록 · 그래프 · 비교 · 운동 기록), 측정 입력
@@ -99,7 +100,7 @@ test/              로직 테스트 + 화면 렌더(오버플로) 테스트
 
 ### 데이터 (Firestore)
 ```
-users/{uid}                {name, code, partnerId?, nudgeAt?, avatar?}
+users/{uid}                {name, code, partnerId?, nudgeAt?, avatar?, gender?}
 users/{uid}/routines/*     {name, tag, exercises[], by, createdAt, lastDone?}
 users/{uid}/sessions/*     {date, routine, totalSec, restSec, sets, exCount, notify, log[], endedAt}
 users/{uid}/body/{date}    {date, height, weight, fat, muscle?}

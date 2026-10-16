@@ -28,30 +28,6 @@ class _RecordsPageState extends State<RecordsPage> {
     builder: (_) => BodyForm(entry: entry, lastHeight: d.myBody.isEmpty ? null : d.myBody.last['height'] as num?),
   );
 
-  Widget _chip(String label, bool on, VoidCallback onTap) => Padding(
-    padding: const EdgeInsets.only(right: 8, bottom: 8),
-    child: Material(
-      color: on ? lime : surf2,
-      shape: const StadiumBorder(),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 36),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          // widthFactor 1: center vertically but stay as wide as the label (alignment alone fills the row).
-          child: Center(
-            widthFactor: 1,
-            child: Text(
-              label,
-              style: ts(13, w: FontWeight.w600, color: on ? ink : sub),
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -333,7 +309,7 @@ class _RecordsPageState extends State<RecordsPage> {
           Wrap(
             children: [
               for (var i = 0; i < bodyMetrics.length; i++)
-                _chip(bodyMetrics[i].label, metric == i, () => setState(() => metric = i)),
+                pill(bodyMetrics[i].label, metric == i, () => setState(() => metric = i)),
             ],
           ),
           // How to read the values: as measured, or each person's change from their first measurement.
@@ -506,9 +482,9 @@ class _RecordsPageState extends State<RecordsPage> {
       if (hasPartner)
         Wrap(
           children: [
-            _chip('함께', w == 'both', () => setState(() => who = 'both')),
-            _chip('나', w == 'me', () => setState(() => who = 'me')),
-            _chip(d.paName, w == 'partner', () => setState(() => who = 'partner')),
+            pill('함께', w == 'both', () => setState(() => who = 'both')),
+            pill('나', w == 'me', () => setState(() => who = 'me')),
+            pill(d.paName, w == 'partner', () => setState(() => who = 'partner')),
           ],
         ),
       if (list.isEmpty)
