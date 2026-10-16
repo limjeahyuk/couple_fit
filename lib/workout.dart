@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'art.dart';
 import 'db.dart';
 import 'push.dart';
 import 'theme.dart';
@@ -368,7 +369,9 @@ class WorkoutView extends StatelessWidget {
             Column(
               children: [
                 Text('${t.ex + 1} / ${exs.length} 종목', style: ts(13, color: muted)),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
+                ExerciseArt(e.name, key: ValueKey(e.name), size: 132),
+                const SizedBox(height: 14),
                 Text(
                   e.name,
                   textAlign: TextAlign.center,

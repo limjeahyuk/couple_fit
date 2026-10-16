@@ -1,3 +1,4 @@
+import 'package:couple_fit/art.dart';
 import 'package:couple_fit/db.dart';
 import 'package:couple_fit/demo.dart';
 import 'package:couple_fit/exercises.dart';
@@ -170,5 +171,11 @@ void main() {
     t.completeSet();
     expect((t.elapsedSec, t.totalSec), (120, 1800));
     expect(logLines(t.log), ['러닝 · 30분', 'plank · 40초']);
+  });
+
+  test('every catalog exercise has a drawing', () {
+    final names = catalog.values.expand((l) => l).map((e) => e.name).toSet();
+    expect(names.difference(arts.keys.toSet()), isEmpty);
+    expect(arts.keys.toSet().difference(names), isEmpty); // no art for a renamed / removed exercise
   });
 }

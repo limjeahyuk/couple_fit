@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'art.dart';
 import 'db.dart';
 import 'exercises.dart';
 import 'theme.dart';
@@ -279,6 +280,8 @@ class _RoutineEditorState extends State<RoutineEditor> {
           children: [
             Row(
               children: [
+                ExerciseArt(e.name, size: 44, animate: false),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(e.name, style: ts(16, w: FontWeight.w600)),
                 ),
@@ -515,6 +518,7 @@ class _ExercisePickerState extends State<ExercisePicker> {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       onTap: () => setState(() => on ? picked.remove(e) : picked.add(e)),
+      leading: ExerciseArt(e.name),
       title: Text(e.name, style: ts(15, w: FontWeight.w600)),
       subtitle: Text(
         [if (x.weight.isNotEmpty) x.weight, '${x.reps}${x.timed ? '' : '회'}', if (had) '이미 있음'].join(' · '),

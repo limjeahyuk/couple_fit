@@ -66,7 +66,9 @@ void main() {
       ),
     ));
     await t.tap(find.text('open'));
-    await t.pumpAndSettle();
+    for (var i = 0; i < 10; i++) {
+      await t.pump(const Duration(milliseconds: 100)); // drawings loop forever, so no pumpAndSettle
+    }
     for (final c in catalog.keys) {
       await t.tap(find.text(c).first);
       await t.pump();
@@ -77,7 +79,9 @@ void main() {
     await t.tap(find.text('벤치프레스'));
     await t.pump();
     await t.tap(find.text('1개 추가'));
-    await t.pumpAndSettle();
+    for (var i = 0; i < 10; i++) {
+      await t.pump(const Duration(milliseconds: 100)); // drawings loop forever, so no pumpAndSettle
+    }
     expect(got!.map((e) => (e as dynamic).weight), ['42.5kg']);
   });
 
