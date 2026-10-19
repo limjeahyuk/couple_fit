@@ -229,4 +229,20 @@ void main() {
     t.completeSet();
     expect((t.finished, t.complete, t.doneSets), (true, true, 4));
   });
+
+  test('routine rebuilt from a record: done exercises take the logged sets, others stay', () {
+    final routine = [
+      Exercise(name: 'squat', sets: 4, reps: '8', weight: '60kg', restSec: 120),
+      Exercise(name: 'lunge', sets: 3, reps: '12', weight: '맨몸'),
+    ];
+    final log = [
+      for (final (w, r) in [('60kg', '8'), ('62.5kg', '8'), ('65kg', '6')]) {'ex': 'squat', 'reps': r, 'weight': w},
+      {'ex': 'plank', 'reps': '40초', 'weight': ''},
+    ];
+    final after = routineFromLog(routine, log);
+    expect(after.map((e) => e.name), ['squat', 'lunge', 'plank']);
+    expect((after[0].label, after[0].restSec), ('60kg×8 · 62.5kg×8 · 65kg×6', 120));
+    expect(after[1], same(routine[1])); // not done this time: untouched
+    expect(after[2].label, '1세트 × 40초');
+  });
 }

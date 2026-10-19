@@ -105,6 +105,26 @@ List<String> logLines(List? log) {
   ];
 }
 
+/// [routine] with each exercise's sets as actually done in [log] (per-set reps/weights).
+/// Exercises not in the log stay as they are; logged ones the routine lacks are added at the end.
+List<Exercise> routineFromLog(List<Exercise> routine, List? log) {
+  final done = <String, List<Map>>{}; // insertion-ordered
+  for (final e in log ?? const []) {
+    (done['${e['ex']}'] ??= []).add(e as Map);
+  }
+  Exercise from(String name, List<Map> sets, int rest) => Exercise(
+    name: name,
+    sets: sets.length,
+    restSec: rest,
+    setReps: [for (final s in sets) '${s['reps']}'],
+    setWeights: [for (final s in sets) '${s['weight'] ?? ''}'],
+  );
+  return [
+    for (final e in routine) done.containsKey(e.name) ? from(e.name, done.remove(e.name)!, e.restSec) : e,
+    for (final MapEntry(:key, :value) in done.entries) from(key, value, 60),
+  ];
+}
+
 String summary(Json s) => '${s['routine']} · ${((s['totalSec'] ?? 0) / 60).round()}분';
 
 class Exercise {
@@ -257,6 +277,11 @@ class AppData {
     }
     return n;
   }
+
+  /// The routine a session of mine came from (by id; older sessions only stored the name).
+  QueryDocumentSnapshot<Json>? routineOf(Json session) =>
+      routines.where((r) => r.id == session['routineId']).firstOrNull ??
+      routines.where((r) => r.data()['name'] == session['routine']).firstOrNull;
 
   /// Recommend the routine done longest ago (never-done first, then creation order).
   QueryDocumentSnapshot<Json>? get todayRoutine {

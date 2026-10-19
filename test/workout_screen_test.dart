@@ -1,6 +1,3 @@
-// A minimal fake Firestore doc for the screen; it never reaches Firestore.
-// ignore_for_file: subtype_of_sealed_class
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:couple_fit/db.dart';
 import 'package:couple_fit/theme.dart';
 import 'package:couple_fit/workout.dart';
@@ -10,27 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Only data() is used while the workout is on screen (saving touches Firestore).
-class _Doc implements QueryDocumentSnapshot<Json> {
-  _Doc(this._d);
-  final Json _d;
-  final ref = _Ref();
-  @override
-  Json data() => _d;
-  @override
-  DocumentReference<Json> get reference => ref;
-  @override
-  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
-}
-
-/// Records routine writes (the mid-workout auto-save).
-class _Ref implements DocumentReference<Json> {
-  final writes = <Json>[];
-  @override
-  Future<void> update(Map<Object, Object?> data) async => writes.add(data.cast<String, dynamic>());
-  @override
-  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
-}
+import 'fakes.dart';
 
 /// Let sheets / dialogs finish animating (the drawings loop forever, so no pumpAndSettle).
 Future<void> settle(WidgetTester t) async {
@@ -51,7 +28,7 @@ void main() {
   testWidgets('workout screen on a small phone: steppers, rest bubble + sheet, order list, rest buttons', (t) async {
     t.view.physicalSize = const Size(375 * 3, 667 * 3); // iPhone SE
     t.view.devicePixelRatio = 3;
-    final doc = _Doc({
+    final doc = FakeDoc({
         'name': '상체 푸시',
         'exercises': [
           Exercise(name: '벤치프레스', sets: 4, reps: '10', weight: '102.5kg', restSec: 90).toMap(),

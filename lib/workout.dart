@@ -225,6 +225,7 @@ class WorkoutSession extends ChangeNotifier {
       await sessionsOf(myUid).add({
         'date': date,
         'routine': r['name'],
+        'routineId': routine.id,
         'totalSec': t.totalSec,
         'restSec': t.restSec,
         'sets': t.doneSets,

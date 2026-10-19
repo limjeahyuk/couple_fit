@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'fakes.dart';
+
 void main() {
   GoogleFonts.config.allowRuntimeFetching = false;
   final today = todayKey();
@@ -93,6 +95,51 @@ void main() {
     await t.tap(find.text('시작하기'));
     await t.pump();
     expect(find.text('성별을 골라주세요'), findsOneWidget);
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('calendar: one line per workout, tap opens the set-by-set record', (t) async {
+    t.view.physicalSize = const Size(390 * 3, 844 * 3);
+    t.view.devicePixelRatio = 3;
+    await t.pumpWidget(MaterialApp(theme: appTheme(), home: Scaffold(body: CalendarPage(data: data[1]))));
+    await t.pump();
+    expect(find.text('인클라인 덤벨 프레스'), findsNothing); // details stay out of the calendar
+    await t.ensureVisible(find.text('상체 푸시 · 45분'));
+    await t.tap(find.text('상체 푸시 · 45분'));
+    await t.pumpAndSettle();
+    expect(find.text('인클라인 덤벨 프레스'), findsOneWidget);
+    expect(find.text('40kg × 10, 40kg × 10, 45kg × 10, 45kg × 10'), findsOneWidget);
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('record ≠ routine: overwrite shown, writes the logged sets; same → hidden', (t) async {
+    t.view.physicalSize = const Size(390 * 3, 844 * 3);
+    t.view.devicePixelRatio = 3;
+    final sets = [for (final w in ['40kg', '40kg', '45kg', '45kg']) Exercise(name: '인클라인 덤벨 프레스', sets: 1, reps: '10', weight: w)];
+    final changed = FakeDoc({'name': '상체 푸시', 'exercises': [sets.first.toMap()]});
+    Future<void> open(FakeDoc r) async {
+      final d = AppData(me: {'name': '혁'}, mySessions: [s], routines: [r]);
+      await t.pumpWidget(MaterialApp(theme: appTheme(), home: Scaffold(body: CalendarPage(data: d))));
+      await t.pump();
+      await t.ensureVisible(find.text('상체 푸시 · 45분'));
+      await t.tap(find.text('상체 푸시 · 45분'));
+      await t.pumpAndSettle();
+    }
+
+    await open(changed);
+    await t.drag(find.text('인클라인 덤벨 프레스').first, const Offset(0, -400));
+    await t.pumpAndSettle();
+    await t.tap(find.text('상체 푸시 루틴 덮어쓰기'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('덮어쓰기'));
+    await t.pumpAndSettle();
+    final written = (changed.ref.writes.single['exercises'] as List).cast<Map<String, dynamic>>();
+    expect(Exercise.fromMap(written.first).label, '40kg×10 · 40kg×10 · 45kg×10 · 45kg×10');
+    expect(find.text('루틴을 이 기록대로 바꿨어요'), findsOneWidget);
+
+    // Routine already matches the record: no button.
+    await open(FakeDoc({'name': '상체 푸시', 'exercises': written}, id: 'r2'));
+    expect(find.text('상체 푸시 루틴 덮어쓰기'), findsNothing);
     expect(t.takeException(), isNull);
   });
 }
