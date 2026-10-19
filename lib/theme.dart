@@ -137,7 +137,7 @@ Widget stepper(String value, String label, void Function(int dir) step,
           ),
         GestureDetector(
           onTap: onTapValue,
-          child: FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: digits(size), maxLines: 1)),
+          child: FittedBox(fit: BoxFit.scaleDown, child: _numUnit(value, size)),
         ),
         Text(label, style: ts(12, color: muted)),
         if (arrows)
@@ -149,3 +149,16 @@ Widget stepper(String value, String label, void Function(int dir) step,
           ),
       ],
     );
+
+/// "60kg" → big 60 + small kg (also 초 / 분); anything else as is.
+Widget _numUnit(String v, double size) {
+  final m = RegExp(r'^(\d+(?:\.\d+)?)\s*(\D+)$').firstMatch(v);
+  return Text.rich(
+    TextSpan(
+      text: m?[1] ?? v,
+      style: digits(size),
+      children: [if (m != null) TextSpan(text: m[2], style: digits(size * 0.45, color: sub))],
+    ),
+    maxLines: 1,
+  );
+}

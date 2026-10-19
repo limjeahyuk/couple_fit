@@ -108,18 +108,103 @@ List<String> logLines(List? log) {
 String summary(Json s) => '${s['routine']} · ${((s['totalSec'] ?? 0) / 60).round()}분';
 
 class Exercise {
-  Exercise({this.name = '', this.sets = 3, this.reps = '10', this.weight = '', this.restSec = 60});
-  String name, reps, weight; // reps may be time, e.g. '40초'
-  int sets, restSec;
+  Exercise({
+    this.name = '',
+    int sets = 3,
+    String reps = '10',
+    String weight = '',
+    this.restSec = 60,
+    List<String>? setReps,
+    List<String>? setWeights,
+  }) : _r = _fit(setReps, sets, reps),
+       _w = _fit(setWeights, sets, weight);
+
+  String name;
+  int restSec;
+
+  /// Reps / weight of each set (a pyramid like 10 → 12 → 14kg is just different values).
+  /// reps may be time, e.g. '40초' / '30분'.
+  final List<String> _r, _w;
+
+  static List<String> _fit(List<String>? per, int sets, String fill) {
+    final n = sets < 1 ? 1 : sets;
+    final l = per != null && per.isNotEmpty ? per.toList() : <String>[fill];
+    while (l.length < n) {
+      l.add(l.last);
+    }
+    return l.sublist(0, n);
+  }
+
+  int get sets => _r.length;
+
+  /// Adding sets repeats the last set's values; removing drops from the end.
+  set sets(int n) {
+    final f = _fit(_r, n, ''), g = _fit(_w, n, '');
+    _r
+      ..clear()
+      ..addAll(f);
+    _w
+      ..clear()
+      ..addAll(g);
+  }
+
+  String repsAt(int i) => _r[i.clamp(0, sets - 1)];
+  String weightAt(int i) => _w[i.clamp(0, sets - 1)];
+  void setRepsAt(int i, String v) => _r[i] = v;
+  void setWeightAt(int i, String v) => _w[i] = v;
+
+  /// First set's values; setting one makes every set the same.
+  String get reps => _r.first;
+  set reps(String v) => _r.fillRange(0, sets, v);
+  String get weight => _w.first;
+  set weight(String v) => _w.fillRange(0, sets, v);
+
+  bool get uniform => _r.every((v) => v == _r.first) && _w.every((v) => v == _w.first);
+
+  /// Mid-workout arrows: shift set [from] and every later set, so a pyramid keeps its shape.
+  void stepRepsFrom(int from, int dir) {
+    for (var i = from; i < sets; i++) {
+      _r[i] = stepReps(_r[i], dir);
+    }
+  }
+
+  void stepWeightFrom(int from, int dir) {
+    for (var i = from; i < sets; i++) {
+      _w[i] = stepWeight(_w[i], dir);
+    }
+  }
 
   bool get timed => reps.contains('초') || cardio;
 
   /// Running, swimming, hiking...: one entry of N minutes, no sets/weight/rest.
   bool get cardio => reps.endsWith('분');
 
+  /// "3세트 × 10회 · 40kg", or per set "40kg×10 · 45kg×8 · 50kg×6".
+  String get label {
+    String r(String v) => '$v${timed ? '' : '회'}';
+    if (uniform) return '$sets세트 × ${r(reps)}${weight.isEmpty ? '' : ' · $weight'}';
+    return [for (var i = 0; i < sets; i++) _w[i].isEmpty ? r(_r[i]) : '${_w[i]}×${_r[i]}'].join(' · ');
+  }
+
   factory Exercise.fromMap(Json m) => Exercise(
-      name: m['name'] ?? '', sets: m['sets'] ?? 3, reps: '${m['reps'] ?? 10}', weight: m['weight'] ?? '', restSec: m['restSec'] ?? 60);
-  Json toMap() => {'name': name, 'sets': sets, 'reps': reps, 'weight': weight, 'restSec': restSec};
+    name: m['name'] ?? '',
+    sets: m['sets'] ?? 3,
+    reps: '${m['reps'] ?? 10}',
+    weight: m['weight'] ?? '',
+    restSec: m['restSec'] ?? 60,
+    setReps: (m['setReps'] as List?)?.map((e) => '$e').toList(),
+    setWeights: (m['setWeights'] as List?)?.map((e) => '$e').toList(),
+  );
+
+  // reps/weight stay for older app versions; per-set lists only when the sets differ.
+  Json toMap() => {
+    'name': name,
+    'sets': sets,
+    'reps': reps,
+    'weight': weight,
+    'restSec': restSec,
+    if (!uniform) ...{'setReps': [..._r], 'setWeights': [..._w]},
+  };
 }
 
 List<Exercise> exercisesOf(Json routine) =>

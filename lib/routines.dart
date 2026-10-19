@@ -268,8 +268,46 @@ class _RoutineEditorState extends State<RoutineEditor> {
     onChanged: set,
   );
 
+  /// Exercises edited set by set (a pyramid etc.); the rest share one value for every set.
+  late final perSet = {for (final e in items) if (!e.uniform) e};
+
+  String _unit(Exercise e) => e.cardio ? '분' : (e.timed ? '초' : '');
+  String _repsTitle(Exercise e) => e.cardio ? '시간(분)' : (e.timed ? '시간(초)' : '횟수');
+  String? _repsIn(Exercise e, String v) => int.tryParse(v) == null ? null : '$v${_unit(e)}';
+  static String _weightIn(String v) {
+    final n = double.tryParse(v);
+    return n == null || n <= 0 ? '맨몸' : '${fmt1(n)}kg';
+  }
+
+  /// − value + on one line, for the per-set rows.
+  Widget _mini(String value, void Function(int) step, VoidCallback onTap) => Row(
+    children: [
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        iconSize: 18,
+        onPressed: () => step(-1),
+        icon: const Icon(Icons.remove, color: sub),
+      ),
+      Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Center(
+            child: FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: digits(15))),
+          ),
+        ),
+      ),
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        iconSize: 18,
+        onPressed: () => step(1),
+        icon: const Icon(Icons.add, color: sub),
+      ),
+    ],
+  );
+
   Widget _row(Exercise e) {
     void up(void Function() f) => setState(f);
+    final split = perSet.contains(e) && !e.cardio;
     return Padding(
       key: ObjectKey(e),
       padding: const EdgeInsets.only(bottom: 12),
@@ -277,6 +315,7 @@ class _RoutineEditorState extends State<RoutineEditor> {
         r: 20,
         p: const EdgeInsets.fromLTRB(16, 6, 6, 8),
         Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -305,43 +344,29 @@ class _RoutineEditorState extends State<RoutineEditor> {
                           _type('세트', '${e.sets}', (v) => e.sets = (int.tryParse(v) ?? e.sets).clamp(1, 20)),
                     ),
                   ),
-                Expanded(
-                  child: stepper(
-                    e.reps,
-                    e.timed ? '시간' : '횟수',
-                    (d) => up(() => e.reps = stepReps(e.reps, d)),
-                    size: 20,
-                    onTapValue: () => _type(
-                      e.cardio
-                          ? '시간(분)'
-                          : e.timed
-                          ? '시간(초)'
-                          : '횟수',
-                      e.reps,
-                      (v) => e.reps = int.tryParse(v) == null
-                          ? e.reps
-                          : '$v${e.cardio
-                                ? '분'
-                                : e.timed
-                                ? '초'
-                                : ''}',
-                    ),
-                  ),
-                ),
-                if (!e.cardio) ...[
+                if (!split) ...[
                   Expanded(
-                    flex: 2,
                     child: stepper(
-                      e.weight.isEmpty ? '-' : e.weight,
-                      '무게',
-                      (d) => up(() => e.weight = stepWeight(e.weight, d)),
+                      e.reps,
+                      e.timed ? '시간' : '횟수',
+                      (d) => up(() => e.reps = stepReps(e.reps, d)),
                       size: 20,
-                      onTapValue: () => _type('무게(kg) · 비우면 맨몸', e.weight, (v) {
-                        final n = double.tryParse(v);
-                        e.weight = n == null || n <= 0 ? '맨몸' : '${fmt1(n)}kg';
-                      }),
+                      onTapValue: () => _type(_repsTitle(e), e.reps, (v) => e.reps = _repsIn(e, v) ?? e.reps),
                     ),
                   ),
+                  if (!e.cardio)
+                    Expanded(
+                      flex: 2,
+                      child: stepper(
+                        e.weight.isEmpty ? '-' : e.weight,
+                        '무게',
+                        (d) => up(() => e.weight = stepWeight(e.weight, d)),
+                        size: 20,
+                        onTapValue: () => _type('무게(kg) · 비우면 맨몸', e.weight, (v) => e.weight = _weightIn(v)),
+                      ),
+                    ),
+                ],
+                if (!e.cardio)
                   Expanded(
                     child: stepper(
                       '${e.restSec}초',
@@ -355,9 +380,52 @@ class _RoutineEditorState extends State<RoutineEditor> {
                       ),
                     ),
                   ),
-                ],
               ],
             ),
+            if (split)
+              for (var i = 0; i < e.sets; i++)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Row(
+                    children: [
+                      SizedBox(width: 44, child: Text('${i + 1}세트', style: ts(13, color: muted))),
+                      Expanded(
+                        child: _mini(
+                          '${e.repsAt(i)}${e.timed ? '' : '회'}',
+                          (d) => up(() => e.setRepsAt(i, stepReps(e.repsAt(i), d))),
+                          () => _type(
+                            '${i + 1}세트 ${_repsTitle(e)}',
+                            e.repsAt(i),
+                            (v) => e.setRepsAt(i, _repsIn(e, v) ?? e.repsAt(i)),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: _mini(
+                          e.weightAt(i).isEmpty ? '-' : e.weightAt(i),
+                          (d) => up(() => e.setWeightAt(i, stepWeight(e.weightAt(i), d))),
+                          () => _type('${i + 1}세트 무게(kg)', e.weightAt(i), (v) => e.setWeightAt(i, _weightIn(v))),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            if (!e.cardio && e.sets > 1)
+              TextButton.icon(
+                onPressed: () => up(() {
+                  if (split) {
+                    perSet.remove(e);
+                    e
+                      ..reps = e.reps // every set back to the first set's values
+                      ..weight = e.weight;
+                  } else {
+                    perSet.add(e);
+                  }
+                }),
+                style: TextButton.styleFrom(foregroundColor: split ? muted : lime, visualDensity: VisualDensity.compact),
+                icon: Icon(split ? Icons.unfold_less : Icons.tune, size: 16),
+                label: Text(split ? '모든 세트 같게' : '세트별로 무게·횟수 다르게', style: ts(13)),
+              ),
           ],
         ),
       ),

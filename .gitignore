@@ -55,3 +55,6 @@ android/app/google-services.json
 # Firebase CLI cache / Cloud Functions dependencies
 .firebase/
 functions/node_modules/
+
+# Preview renders from tool/*_test.dart
+tool/*.png

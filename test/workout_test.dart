@@ -178,4 +178,55 @@ void main() {
     expect(names.difference(arts.keys.toSet()), isEmpty);
     expect(arts.keys.toSet().difference(names), isEmpty); // no art for a renamed / removed exercise
   });
+
+  test('rest can be shortened mid-rest, never below what was already rested', () {
+    var now = DateTime(2026, 10, 13, 9);
+    final t = WorkoutTracker([Exercise(sets: 3, restSec: 90)], now: () => now);
+    t.completeSet();
+    now = now.add(const Duration(seconds: 50));
+    t.addRest(-15);
+    expect((t.restTarget, t.restLeft), (75, 25));
+    t.addRest(-60); // would be 15s, but 50s already passed: ends now
+    expect((t.restTarget, t.tick(), t.resting, t.restSec), (50, true, false, 50));
+  });
+
+  test('per-set reps/weights: saved, loaded, pyramid keeps its shape', () {
+    final e = Exercise(name: 'bench', sets: 3, reps: '12', weight: '10kg');
+    expect((e.uniform, e.toMap().containsKey('setWeights')), (true, false)); // old format when all sets match
+    e
+      ..setWeightAt(1, '12kg')
+      ..setWeightAt(2, '14kg')
+      ..setRepsAt(2, '8');
+    expect(e.label, '10kg×12 · 12kg×12 · 14kg×8');
+    final back = Exercise.fromMap(e.toMap());
+    expect([for (var i = 0; i < 3; i++) '${back.weightAt(i)}/${back.repsAt(i)}'], ['10kg/12', '12kg/12', '14kg/8']);
+    back.stepWeightFrom(1, 1); // mid-workout ▲ on set 2: sets 2 and 3 move, set 1 stays
+    expect([back.weightAt(0), back.weightAt(1), back.weightAt(2)], ['10kg', '13kg', '15kg']);
+    back.sets = 4; // a new set repeats the last one
+    expect((back.sets, back.weightAt(3), back.repsAt(3)), (4, '15kg', '8'));
+    back.sets = 2;
+    expect(back.label, '10kg×12 · 13kg×12');
+    expect(Exercise.fromMap({'name': 'old', 'sets': 3, 'reps': '10', 'weight': '40kg'}).label, '3세트 × 10회 · 40kg');
+  });
+
+  test('exercises can be done in any order; skipped ones come back', () {
+    final t = WorkoutTracker([
+      Exercise(name: 'a', sets: 1, restSec: 0),
+      Exercise(name: 'b', sets: 1, restSec: 0),
+      Exercise(name: 'c', sets: 2, restSec: 0, setWeights: ['10kg', '12kg']),
+    ]);
+    t.select(2); // c first
+    t.completeSet();
+    t.completeSet();
+    expect((t.isDone(2), t.current.name), (true, 'a')); // wraps around to the first unfinished
+    expect(t.log.map((l) => l['weight']), ['10kg', '12kg']); // each set logs its own weight
+    t.select(2); // finished: ignored
+    expect(t.current.name, 'a');
+    t.completeSet();
+    t.undo(); // undo puts a back
+    expect((t.done.join(','), t.current.name), ('0,0,2', 'a'));
+    t.completeSet();
+    t.completeSet();
+    expect((t.finished, t.complete, t.doneSets), (true, true, 4));
+  });
 }
