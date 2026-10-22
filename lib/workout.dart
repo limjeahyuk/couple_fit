@@ -8,11 +8,14 @@ import 'package:flutter/services.dart';
 import 'art.dart';
 import 'db.dart';
 import 'push.dart';
+import 'routines.dart';
 import 'theme.dart';
 
 /// Pure workout state. Wall-clock based so it stays correct while the app is backgrounded.
 class WorkoutTracker {
-  WorkoutTracker(this.exercises, {DateTime Function()? now}) : _now = now ?? DateTime.now {
+  WorkoutTracker(this.exercises, {DateTime Function()? now})
+    : _now = now ?? DateTime.now,
+      done = List.filled(exercises.length, 0, growable: true) {
     start = _now();
   }
 
@@ -24,7 +27,7 @@ class WorkoutTracker {
   Duration _restTotal = Duration.zero;
 
   /// Sets finished per exercise.
-  late final List<int> done = List.filled(exercises.length, 0);
+  final List<int> done;
 
   /// What was actually done, one entry per completed set (reps/weight as they were at that moment).
   final log = <Json>[];
@@ -89,6 +92,13 @@ class WorkoutTracker {
     final e = exercises[i];
     final min = i == ex ? done[i] + 1 : (done[i] < 1 ? 1 : done[i]);
     e.sets = (e.sets + dir).clamp(min, 20);
+  }
+
+  /// Exercises added mid-workout go to the end of the order.
+  void add(List<Exercise> more) {
+    if (finished) return;
+    exercises.addAll(more);
+    done.addAll(List.filled(more.length, 0));
   }
 
   /// Do exercise [i] next instead of the listed order (a running rest keeps going).
@@ -271,9 +281,21 @@ class WorkoutSession extends ChangeNotifier {
 
 /// Session / rest / finish screen for [s], shown in the 운동 tab.
 class WorkoutView extends StatelessWidget {
-  const WorkoutView({super.key, required this.s, required this.onDone});
+  const WorkoutView({super.key, required this.s, required this.onDone, this.person = const {}, this.body = const []});
   final WorkoutSession s;
   final VoidCallback onDone; // after saving
+  final Json person; // my profile and body records, for the picker's default weights
+  final List<Json> body;
+
+  /// Same picker as the routine editor; the picks join today's order and the routine.
+  Future<void> _add(BuildContext context) async {
+    final picked = await showModalBottomSheet<List<Exercise>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ExercisePicker(person: person, body: body, have: {for (final e in t.exercises) e.name}),
+    );
+    if (picked != null && picked.isNotEmpty) s.edit(() => t.add(picked));
+  }
 
   WorkoutTracker get t => s.t;
   Json get r => s.r;
@@ -737,6 +759,13 @@ class WorkoutView extends StatelessWidget {
           child: Text('오늘의 순서 · 눌러서 수정하거나 먼저 하기', style: ts(13, color: muted)),
         ),
         for (var i = 0; i < exs.length; i++) _orderRow(context, i),
+        const SizedBox(height: 6),
+        TextButton.icon(
+          onPressed: () => _add(context),
+          style: TextButton.styleFrom(foregroundColor: lime, minimumSize: const Size.fromHeight(48)),
+          icon: const Icon(Icons.add, size: 20),
+          label: const Text('운동 추가'),
+        ),
       ],
     );
   }

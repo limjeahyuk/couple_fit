@@ -63,6 +63,19 @@ void main() {
     expect(s.t.current.name, '러닝');
     s.act(() => s.t.select(0));
 
+    // + 운동 추가 → picker → 덤벨 벤치프레스: added to today's order and written into the routine.
+    await t.scrollUntilVisible(find.byIcon(Icons.add), 200);
+    await t.tap(find.byIcon(Icons.add).last);
+    await settle(t);
+    expect(find.text('운동을 골라주세요'), findsOneWidget); // picker is open
+    await t.tap(find.text('덤벨 벤치프레스'));
+    await t.pump();
+    await t.tap(find.text('1개 추가'));
+    await settle(t);
+    expect(s.t.exercises.map((e) => e.name), ['벤치프레스', '러닝', '덤벨 벤치프레스']);
+    await t.pump(const Duration(seconds: 1)); // routine auto-save
+    expect((doc.ref.writes.last['exercises'] as List).length, 3);
+
     s.act(s.t.completeSet); // → resting
     await t.pump(const Duration(milliseconds: 100));
     expect(find.text('−15초'), findsOneWidget);

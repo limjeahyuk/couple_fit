@@ -347,7 +347,7 @@ class _ShellState extends State<Shell> {
           HomePage(data: data, go: go),
           // A running workout takes over the 운동 tab; other tabs stay usable meanwhile.
           if (activeWorkout.value case final w?)
-            WorkoutView(s: w, onDone: () => go(0))
+            WorkoutView(s: w, onDone: () => go(0), person: data.me, body: data.myBody)
           else
             RoutinesPage(data: data, uid: myUid),
           CalendarPage(data: data),

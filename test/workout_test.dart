@@ -245,4 +245,17 @@ void main() {
     expect(after[1], same(routine[1])); // not done this time: untouched
     expect(after[2].label, '1세트 × 40초');
   });
+
+  test('exercises added mid-workout join the end of the order', () {
+    final t = WorkoutTracker([Exercise(name: 'a', sets: 1, restSec: 0)]);
+    t.add([Exercise(name: 'b', sets: 2, restSec: 0)]);
+    expect((t.totalSets, t.done.length), (3, 2));
+    t.completeSet(); // a done → b
+    expect(t.current.name, 'b');
+    t.completeSet();
+    t.completeSet();
+    expect((t.finished, t.complete), (true, true));
+    t.add([Exercise(name: 'c')]); // finished: ignored
+    expect(t.exercises.length, 2);
+  });
 }
